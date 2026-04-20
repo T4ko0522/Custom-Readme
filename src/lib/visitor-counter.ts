@@ -36,3 +36,22 @@ export async function incrementVisitors(
     return null;
   }
 }
+
+/**
+ * username の現在の訪問者数を取得する（INCR しない）。
+ * 画像レンダー側はキャッシュされうるので読み取り専用、INCR はビーコン経路で行う。
+ * キー未作成時は 0、Redis 未設定または失敗時は null。
+ */
+export async function getVisitors(username: string): Promise<number | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  const key = `${KEY_PREFIX}${username.toLowerCase()}`;
+  try {
+    const value = await redis.get<number | string | null>(key);
+    if (value === null || value === undefined) return 0;
+    const n = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return null;
+  }
+}

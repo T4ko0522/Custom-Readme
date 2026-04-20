@@ -8,7 +8,7 @@ import {
   STATIC_BAR_GRADIENT,
 } from "@/lib/svg";
 import { getHiGifDataUri } from "@/lib/assets";
-import { incrementVisitors } from "@/lib/visitor-counter";
+import { getVisitors } from "@/lib/visitor-counter";
 import type { TemplateDefinition } from "./types";
 
 const parseList = (s: string | undefined) =>
@@ -134,7 +134,7 @@ export const profileCard: TemplateDefinition = {
       type: "string",
       default: "",
       description:
-        "訪問者カウンタの Redis キー識別子。未指定時は name を使用（大小文字は区別されません）",
+        "訪問者カウンタの Redis キー識別子。未指定時は name を使用（大小文字は区別されません）。カウント加算には別途 /api/visit/{id} のビーコン画像を README に貼る必要があります",
     },
   },
 
@@ -148,7 +148,7 @@ export const profileCard: TemplateDefinition = {
     const [skillsLines, hiGif, visitors] = await Promise.all([
       fetchSkillsLines((props.skills as string) ?? ""),
       getHiGifDataUri(origin),
-      incrementVisitors(counterKey),
+      getVisitors(counterKey),
     ]);
     return { skillsLines, hiGif, visitors };
   },
