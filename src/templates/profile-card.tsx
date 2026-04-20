@@ -7,7 +7,7 @@ import {
   dynamicLeftBar,
   STATIC_BAR_GRADIENT,
 } from "@/lib/svg";
-import { HI_GIF_DATA_URI } from "@/lib/assets";
+import { getHiGifDataUri } from "@/lib/assets";
 import type { TemplateDefinition } from "./types";
 
 const parseList = (s: string | undefined) =>
@@ -132,11 +132,15 @@ export const profileCard: TemplateDefinition = {
   },
 
   // ============================================================
-  // データ取得：skillicons.dev の SVG を行ごとに並列フェッチ
+  // データ取得：skillicons.dev の SVG と Hi.gif を並列フェッチ
   // ============================================================
   fetchData: async (props) => {
-    const skillsLines = await fetchSkillsLines((props.skills as string) ?? "");
-    return { skillsLines };
+    const origin = props.__origin as string;
+    const [skillsLines, hiGif] = await Promise.all([
+      fetchSkillsLines((props.skills as string) ?? ""),
+      getHiGifDataUri(origin),
+    ]);
+    return { skillsLines, hiGif };
   },
 
   // ============================================================
@@ -150,6 +154,7 @@ export const profileCard: TemplateDefinition = {
     const quoteLines = parseLines(props.quote as string);
 
     const skillsLines = (props.skillsLines as IconBlock[] | undefined) ?? [];
+    const hiGif = props.hiGif as string;
 
     return (
       <div
@@ -193,7 +198,7 @@ export const profileCard: TemplateDefinition = {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={HI_GIF_DATA_URI}
+              src={hiGif}
               alt="Hi"
               width={36}
               height={36}
@@ -360,6 +365,7 @@ export const profileCard: TemplateDefinition = {
     const quoteLines = parseLines(props.quote as string);
 
     const skillsLines = (props.skillsLines as IconBlock[] | undefined) ?? [];
+    const hiGif = props.hiGif as string;
 
     const W = 900;
     const padX = 56;
@@ -381,7 +387,7 @@ export const profileCard: TemplateDefinition = {
     const greetingCenterY = greetingTopY + greetingBlockH / 2;
     const gifY = greetingCenterY - gifSize / 2;
     parts.push(
-      `<image x="${contentX}" y="${gifY}" width="${gifSize}" height="${gifSize}" href="${HI_GIF_DATA_URI}" preserveAspectRatio="xMidYMid meet" class="fade-in" style="animation-delay: 0.1s" />`,
+      `<image x="${contentX}" y="${gifY}" width="${gifSize}" height="${gifSize}" href="${hiGif}" preserveAspectRatio="xMidYMid meet" class="fade-in" style="animation-delay: 0.1s" />`,
     );
     greetingLines.forEach((line, i) => {
       const delay = (0.2 + i * 0.08).toFixed(2);

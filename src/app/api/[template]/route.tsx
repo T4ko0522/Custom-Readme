@@ -57,6 +57,9 @@ export async function GET(
     throw e;
   }
 
+  // テンプレートが public/ 配下のアセットを runtime fetch できるようオリジンを注入
+  props.__origin = new URL(request.url).origin;
+
   // GitHubなど外部データ取得
   if (definition.fetchData) {
     try {
