@@ -142,18 +142,15 @@ export default function PreviewPage() {
     setImageUrl(url);
   };
 
-  // profile-card はキャッシュ下でもカウントが回るよう、ビーコン用 1x1 GIF を末尾に併記する。
-  // counterId が未指定なら name を使用（API 側のサニタイズ規則に揃えて lowercase）。
-  const beaconId =
-    selected?.name === "profile-card"
-      ? (params.counterId || params.name || "").trim().toLowerCase()
-      : "";
+  // button は href が指定されていれば Markdown 側でリンク化する
+  const linkHref =
+    selected?.name === "button" ? (params.href || "").trim() : "";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const markdownSnippet = imageUrl
-    ? beaconId
-      ? `![${selected?.name}](${origin}${imageUrl})\n![](${origin}/api/visit/${encodeURIComponent(beaconId)})`
-      : `![${selected?.name}](${origin}${imageUrl})`
-    : "";
+  const markdownSnippet = (() => {
+    if (!imageUrl) return "";
+    const img = `![${selected?.name}](${origin}${imageUrl})`;
+    return linkHref ? `[${img}](${linkHref})` : img;
+  })();
 
   const handleCopy = async () => {
     if (!markdownSnippet) return;

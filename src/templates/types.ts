@@ -17,6 +17,12 @@ export type TemplateDefinition = {
   height: number;
   params: Record<string, ParamDef>;
   fonts?: ("default" | "ja")[];
+  /**
+   * 画像を一切キャッシュさせたくない場合に true。
+   * 例: 訪問者カウンタのように画像配信そのものが副作用（Redis INCR）を伴うテンプレート。
+   * ルートは Cache-Control: no-store を付与し、GitHub Camo / CDN / ブラウザを素通りさせる。
+   */
+  noCache?: boolean;
   /** レンダー前にGitHub APIなどからデータを取得。返却値は props にマージされる */
   fetchData?: (
     props: Record<string, unknown>,

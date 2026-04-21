@@ -8,7 +8,6 @@ import {
   STATIC_BAR_GRADIENT,
 } from "@/lib/svg";
 import { getHiGifDataUri } from "@/lib/assets";
-import { getVisitors } from "@/lib/visitor-counter";
 import type { TemplateDefinition } from "./types";
 
 const parseList = (s: string | undefined) =>
@@ -130,12 +129,6 @@ export const profileCard: TemplateDefinition = {
       description: "カラーテーマ",
       enum: ["dark", "light", "github"],
     },
-    counterId: {
-      type: "string",
-      default: "",
-      description:
-        "訪問者カウンタの Redis キー識別子。未指定時は name を使用（大小文字は区別されません）。カウント加算には別途 /api/visit/{id} のビーコン画像を README に貼る必要があります",
-    },
   },
 
   // ============================================================
@@ -143,14 +136,11 @@ export const profileCard: TemplateDefinition = {
   // ============================================================
   fetchData: async (props) => {
     const origin = props.__origin as string;
-    const counterKey =
-      ((props.counterId as string) || "").trim() || (props.name as string);
-    const [skillsLines, hiGif, visitors] = await Promise.all([
+    const [skillsLines, hiGif] = await Promise.all([
       fetchSkillsLines((props.skills as string) ?? ""),
       getHiGifDataUri(origin),
-      getVisitors(counterKey),
     ]);
-    return { skillsLines, hiGif, visitors };
+    return { skillsLines, hiGif };
   },
 
   // ============================================================
@@ -165,11 +155,6 @@ export const profileCard: TemplateDefinition = {
 
     const skillsLines = (props.skillsLines as IconBlock[] | undefined) ?? [];
     const hiGif = props.hiGif as string;
-    const visitors = props.visitors as number | null | undefined;
-    const visitorsLabel =
-      typeof visitors === "number"
-        ? `Profile views: ${visitors.toLocaleString()}`
-        : null;
 
     return (
       <div
@@ -192,43 +177,6 @@ export const profileCard: TemplateDefinition = {
             background: STATIC_BAR_GRADIENT,
           }}
         />
-
-        {/* 訪問者カウンター（Upstash Redis が構成されている場合のみ表示） */}
-        {visitorsLabel && (
-          <div
-            style={{
-              position: "absolute",
-              top: "20px",
-              right: "24px",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "5px 11px",
-              border: `1px solid ${theme.border}`,
-              borderRadius: "999px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                width: "7px",
-                height: "7px",
-                borderRadius: "999px",
-                background: "#f97316",
-              }}
-            />
-            <span
-              style={{
-                fontSize: "12px",
-                fontWeight: 700,
-                color: theme.subtext,
-                letterSpacing: "0.2px",
-              }}
-            >
-              {visitorsLabel}
-            </span>
-          </div>
-        )}
 
         {/* メインコンテンツ */}
         <div
@@ -418,11 +366,6 @@ export const profileCard: TemplateDefinition = {
 
     const skillsLines = (props.skillsLines as IconBlock[] | undefined) ?? [];
     const hiGif = props.hiGif as string;
-    const visitors = props.visitors as number | null | undefined;
-    const visitorsLabel =
-      typeof visitors === "number"
-        ? `Profile views: ${visitors.toLocaleString()}`
-        : null;
 
     const W = 900;
     const padX = 56;
@@ -540,45 +483,15 @@ export const profileCard: TemplateDefinition = {
       </defs>
     `;
 
-    // 4隅のコーナーマーカー（バー側は干渉するので右側のみ）。
-    // 訪問者バッジが右上を占有する場合は重ならないよう top-right を省略する。
-    const topRightCorner = visitorsLabel
-      ? ""
-      : `<path d="M ${W - 44} 24 L ${W - 24} 24 L ${W - 24} 44"
-          stroke="#f97316" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.45"
-          style="animation: fadeIn 0.8s ease-out 0.1s both" />`;
+    // 4隅のコーナーマーカー（バー側は干渉するので右側のみ）
     const corners = `
-      ${topRightCorner}
+      <path d="M ${W - 44} 24 L ${W - 24} 24 L ${W - 24} 44"
+        stroke="#f97316" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.45"
+        style="animation: fadeIn 0.8s ease-out 0.1s both" />
       <path d="M ${W - 24} ${H - 44} L ${W - 24} ${H - 24} L ${W - 44} ${H - 24}"
         stroke="#f472b6" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.4"
         style="animation: fadeIn 0.8s ease-out 0.2s both" />
     `;
-
-    // 訪問者カウンター（Upstash Redis が構成されている場合のみ表示）。
-    // pill 型の枠に脈動するドットを添える。幅はラベル文字数から概算。
-    let visitorBadge = "";
-    if (visitorsLabel) {
-      const labelLen = visitorsLabel.length;
-      const CHAR_W = 6.4; // 混合ケース Inter 700 12px の平均字幅
-      const LETTER_SP = 0.2;
-      const textW = labelLen * CHAR_W + (labelLen - 1) * LETTER_SP;
-      const bh = 24;
-      const bw = Math.round(textW + 7 /* dot */ + 6 /* gap */ + 24 /* padding x2 */);
-      const bx = W - 24 - bw;
-      const by = 20;
-      const cy = by + bh / 2;
-      visitorBadge = `
-        <g class="fade-in" style="animation-delay: 0.05s">
-          <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="${bh / 2}" ry="${bh / 2}"
-            fill="none" stroke="${theme.border}" stroke-width="1" />
-          <circle cx="${bx + 12}" cy="${cy}" r="3.5" fill="#f97316">
-            <animate attributeName="opacity" values="1;0.3;1" dur="1.8s" repeatCount="indefinite" />
-          </circle>
-          <text x="${bx + 22}" y="${cy + 4}" font-size="12" font-weight="700" fill="${theme.subtext}"
-            font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" letter-spacing="0.2">${escSvg(visitorsLabel)}</text>
-        </g>
-      `;
-    }
 
     return svgRoot(
       W,
@@ -600,9 +513,6 @@ export const profileCard: TemplateDefinition = {
 
         <!-- コーナーマーカー -->
         ${corners}
-
-        <!-- 訪問者カウンター（右上） -->
-        ${visitorBadge}
 
         <!-- コンテンツ -->
         ${parts.join("\n")}

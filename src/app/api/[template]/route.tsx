@@ -13,6 +13,14 @@ const CACHE_HEADERS = {
     "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
 };
 
+// 画像配信そのものが副作用を持つテンプレート用。GitHub Camo / CDN / ブラウザ
+// すべてを素通りさせ、毎リクエスト origin まで届かせる。
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0, private",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 /** エラー時に返すSVG画像 */
 function errorSvg(message: string, width = 500, height = 120): Response {
   const theme = getTheme("dark");
@@ -77,20 +85,29 @@ export async function GET(
   }
 
   const format = searchParams.get("format") || "png";
+  const cacheHeaders = definition.noCache ? NO_STORE_HEADERS : CACHE_HEADERS;
 
   // SVG形式（アニメーション付き）
   if (format === "svg" && definition.renderSvg) {
     return new Response(definition.renderSvg(props), {
       headers: {
         "Content-Type": "image/svg+xml",
-        ...CACHE_HEADERS,
+        ...cacheHeaders,
       },
     });
   }
 
   // PNG形式（デフォルト）
-  const width = Number(searchParams.get("width")) || definition.width;
-  const height = Number(searchParams.get("height")) || definition.height;
+  // テンプレートの fetchData が props.__width / __height を返した場合は
+  // 定義値の代わりに採用する（label 長などからの動的サイズ算出用）
+  const dynamicW =
+    typeof props.__width === "number" ? (props.__width as number) : null;
+  const dynamicH =
+    typeof props.__height === "number" ? (props.__height as number) : null;
+  const width =
+    Number(searchParams.get("width")) || dynamicW || definition.width;
+  const height =
+    Number(searchParams.get("height")) || dynamicH || definition.height;
 
   const fontSets = definition.fonts ?? ["default"];
   if (searchParams.get("fontLang") === "ja" && !fontSets.includes("ja")) {
@@ -102,6 +119,6 @@ export async function GET(
     width,
     height,
     fonts,
-    headers: CACHE_HEADERS,
+    headers: cacheHeaders,
   });
 }

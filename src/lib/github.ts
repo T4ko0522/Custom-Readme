@@ -102,6 +102,23 @@ async function rest<T>(path: string): Promise<T> {
 // User Stats
 // ============================================================
 
+export type RankLevel =
+  | "S"
+  | "A+"
+  | "A"
+  | "A-"
+  | "B+"
+  | "B"
+  | "B-"
+  | "C+"
+  | "C";
+
+export type Rank = {
+  level: RankLevel;
+  /** 0 に近いほど上位。anuraghazra/github-readme-stats と同じ定義（top X%） */
+  percentile: number;
+};
+
 export type UserStats = {
   login: string;
   name: string | null;
@@ -113,8 +130,81 @@ export type UserStats = {
   totalCommits: number;
   totalPRs: number;
   totalIssues: number;
+  totalReviews: number;
   totalContributions: number;
+  rank: Rank;
 };
+
+// ============================================================
+// Rank calculation
+// 参考: github-readme-stats / src/calculateRank.js
+// https://github.com/anuraghazra/github-readme-stats
+// ============================================================
+
+/** 指数分布 CDF（高頻度な指標に使用。commits / prs / issues / reviews） */
+const exponentialCdf = (x: number): number => 1 - Math.pow(2, -x);
+/** 対数正規分布 CDF の近似（稀少性の高い指標に使用。stars / followers） */
+const logNormalCdf = (x: number): number => x / (1 + x);
+
+const RANK_THRESHOLDS = [1, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100] as const;
+const RANK_LEVELS: readonly RankLevel[] = [
+  "S",
+  "A+",
+  "A",
+  "A-",
+  "B+",
+  "B",
+  "B-",
+  "C+",
+  "C",
+];
+
+export function calculateRank(input: {
+  all_commits: boolean;
+  commits: number;
+  prs: number;
+  issues: number;
+  reviews: number;
+  stars: number;
+  followers: number;
+}): Rank {
+  const COMMITS_MEDIAN = input.all_commits ? 1000 : 250;
+  const COMMITS_WEIGHT = 2;
+  const PRS_MEDIAN = 50;
+  const PRS_WEIGHT = 3;
+  const ISSUES_MEDIAN = 25;
+  const ISSUES_WEIGHT = 1;
+  const REVIEWS_MEDIAN = 2;
+  const REVIEWS_WEIGHT = 1;
+  const STARS_MEDIAN = 50;
+  const STARS_WEIGHT = 4;
+  const FOLLOWERS_MEDIAN = 10;
+  const FOLLOWERS_WEIGHT = 1;
+
+  const TOTAL_WEIGHT =
+    COMMITS_WEIGHT +
+    PRS_WEIGHT +
+    ISSUES_WEIGHT +
+    REVIEWS_WEIGHT +
+    STARS_WEIGHT +
+    FOLLOWERS_WEIGHT;
+
+  const rank =
+    1 -
+    (COMMITS_WEIGHT * exponentialCdf(input.commits / COMMITS_MEDIAN) +
+      PRS_WEIGHT * exponentialCdf(input.prs / PRS_MEDIAN) +
+      ISSUES_WEIGHT * exponentialCdf(input.issues / ISSUES_MEDIAN) +
+      REVIEWS_WEIGHT * exponentialCdf(input.reviews / REVIEWS_MEDIAN) +
+      STARS_WEIGHT * logNormalCdf(input.stars / STARS_MEDIAN) +
+      FOLLOWERS_WEIGHT * logNormalCdf(input.followers / FOLLOWERS_MEDIAN)) /
+      TOTAL_WEIGHT;
+
+  const percentile = Math.max(0, Math.min(100, rank * 100));
+  const idx = RANK_THRESHOLDS.findIndex((t) => percentile <= t);
+  const level = RANK_LEVELS[idx >= 0 ? idx : RANK_LEVELS.length - 1];
+
+  return { level, percentile };
+}
 
 const USER_STATS_QUERY = /* GraphQL */ `
   query ($username: String!) {
@@ -128,9 +218,10 @@ const USER_STATS_QUERY = /* GraphQL */ `
         totalCommitContributions
         totalIssueContributions
         totalPullRequestContributions
+        totalPullRequestReviewContributions
         restrictedContributionsCount
       }
-      pullRequests(states: MERGED) { totalCount }
+      pullRequests { totalCount }
       issues { totalCount }
       repositories(
         first: 100
@@ -157,6 +248,7 @@ type UserStatsGraphQL = {
       totalCommitContributions: number;
       totalIssueContributions: number;
       totalPullRequestContributions: number;
+      totalPullRequestReviewContributions: number;
       restrictedContributionsCount: number;
     };
     pullRequests: { totalCount: number };
@@ -168,7 +260,12 @@ type UserStatsGraphQL = {
   } | null;
 };
 
-export async function fetchUserStats(username: string): Promise<UserStats> {
+export async function fetchUserStats(
+  username: string,
+  options: { includeAllCommits?: boolean } = {},
+): Promise<UserStats> {
+  const { includeAllCommits = false } = options;
+
   if (process.env.GITHUB_PAT) {
     const data = await graphql<UserStatsGraphQL>(USER_STATS_QUERY, { username });
     if (!data.user) {
@@ -179,23 +276,42 @@ export async function fetchUserStats(username: string): Promise<UserStats> {
       (sum, r) => sum + r.stargazerCount,
       0,
     );
+    const totalCommits =
+      u.contributionsCollection.totalCommitContributions +
+      u.contributionsCollection.restrictedContributionsCount;
+    const totalPRs = u.pullRequests.totalCount;
+    const totalIssues = u.issues.totalCount;
+    const totalReviews =
+      u.contributionsCollection.totalPullRequestReviewContributions;
+    const followers = u.followers.totalCount;
+
+    const rank = calculateRank({
+      all_commits: includeAllCommits,
+      commits: totalCommits,
+      prs: totalPRs,
+      issues: totalIssues,
+      reviews: totalReviews,
+      stars: totalStars,
+      followers,
+    });
+
     return {
       login: u.login,
       name: u.name,
       avatarUrl: u.avatarUrl,
       totalStars,
       totalRepos: u.repositories.totalCount,
-      followers: u.followers.totalCount,
+      followers,
       following: u.following.totalCount,
-      totalCommits:
-        u.contributionsCollection.totalCommitContributions +
-        u.contributionsCollection.restrictedContributionsCount,
-      totalPRs: u.pullRequests.totalCount,
-      totalIssues: u.issues.totalCount,
+      totalCommits,
+      totalPRs,
+      totalIssues,
+      totalReviews,
       totalContributions:
         u.contributionsCollection.totalCommitContributions +
         u.contributionsCollection.totalIssueContributions +
         u.contributionsCollection.totalPullRequestContributions,
+      rank,
     };
   }
 
@@ -216,6 +332,17 @@ export async function fetchUserStats(username: string): Promise<UserStats> {
   );
   const totalStars = repos.reduce((sum, r) => sum + r.stargazers_count, 0);
 
+  // commits/PRs/issues/reviews は REST では集計困難なため 0 として rank 計算
+  const rank = calculateRank({
+    all_commits: includeAllCommits,
+    commits: 0,
+    prs: 0,
+    issues: 0,
+    reviews: 0,
+    stars: totalStars,
+    followers: u.followers,
+  });
+
   return {
     login: u.login,
     name: u.name,
@@ -224,11 +351,12 @@ export async function fetchUserStats(username: string): Promise<UserStats> {
     totalRepos: u.public_repos,
     followers: u.followers,
     following: u.following,
-    // REST APIでは正確な集計ができないため 0
     totalCommits: 0,
     totalPRs: 0,
     totalIssues: 0,
+    totalReviews: 0,
     totalContributions: 0,
+    rank,
   };
 }
 
