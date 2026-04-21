@@ -19,7 +19,7 @@ import type { TemplateDefinition } from "./types";
 // ============================================================
 
 const W = 360;
-const H = 100;
+const H = 56;
 
 export const profileViews: TemplateDefinition = {
   name: "profile-views",
@@ -87,22 +87,22 @@ export const profileViews: TemplateDefinition = {
             display: "flex",
             flex: 1,
             alignItems: "center",
-            gap: "14px",
-            padding: "0 28px",
+            gap: "10px",
+            padding: "0 20px",
           }}
         >
           <div
             style={{
               display: "flex",
-              width: "10px",
-              height: "10px",
+              width: "8px",
+              height: "8px",
               borderRadius: "999px",
               background: "#f97316",
             }}
           />
           <span
             style={{
-              fontSize: "14px",
+              fontSize: "12px",
               fontWeight: 700,
               color: theme.subtext,
               textTransform: "uppercase",
@@ -115,10 +115,10 @@ export const profileViews: TemplateDefinition = {
             style={{
               display: "flex",
               marginLeft: "auto",
-              fontSize: "28px",
+              fontSize: "18px",
               fontWeight: 700,
               color: theme.text,
-              letterSpacing: "-0.5px",
+              letterSpacing: "-0.3px",
             }}
           >
             {countText}
@@ -136,11 +136,11 @@ export const profileViews: TemplateDefinition = {
       typeof visitors === "number" ? visitors.toLocaleString() : "—";
 
     const barW = 7;
-    const padX = 28;
+    const padX = 20;
     const contentX = barW + padX;
     const centerY = H / 2;
 
-    const RADIUS = 12;
+    const RADIUS = 10;
 
     return svgRoot(
       W,
@@ -161,22 +161,22 @@ export const profileViews: TemplateDefinition = {
         ${dynamicLeftBar(H)}
 
         <!-- 脈動するドット -->
-        <circle cx="${contentX + 5}" cy="${centerY}" r="5" fill="#f97316"
+        <circle cx="${contentX + 4}" cy="${centerY}" r="4" fill="#f97316"
           class="fade-in" style="animation-delay: 0.1s">
           <animate attributeName="opacity" values="1;0.35;1" dur="1.8s" repeatCount="indefinite" />
         </circle>
 
         <!-- ラベル -->
-        <text x="${contentX + 20}" y="${centerY + 5}" font-size="14" font-weight="700"
+        <text x="${contentX + 18}" y="${centerY + 4}" font-size="12" font-weight="700"
           fill="${theme.subtext}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
           letter-spacing="1.5" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(
             label.toUpperCase(),
           )}</text>
 
-        <!-- カウント（右寄せ・ラベルと同じ fade-in-up / delay 0.2s） -->
-        <text x="${W - padX}" y="${centerY + 10}" text-anchor="end" font-size="28" font-weight="700"
+        <!-- カウント（右寄せ） -->
+        <text x="${W - padX}" y="${centerY + 6}" text-anchor="end" font-size="18" font-weight="700"
           fill="${theme.text}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
-          letter-spacing="-0.5" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(countText)}</text>
+          letter-spacing="-0.3" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(countText)}</text>
       </g>
     `,
     );
