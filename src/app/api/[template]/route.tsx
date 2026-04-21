@@ -8,9 +8,23 @@ import { svgRoot, escSvg } from "@/lib/svg";
 
 export const runtime = "edge";
 
+// デプロイごとに変わる ID。ETag に埋め込むことで、max-age が生きていても
+// デプロイを跨いだ古いレスポンスは必ず 200 で差し替わる（同一デプロイ中は 304）。
+// ローカル開発では "dev" にフォールバックする。
+const DEPLOY_ID =
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ||
+  "dev";
+const ETAG = `W/"${DEPLOY_ID}"`;
+
 const CACHE_HEADERS = {
+  // max-age=0 + must-revalidate: ブラウザは毎回 If-None-Match で問い合わせる。
+  //   ETag が一致すれば 304、デプロイが変われば 200 で新しい画像を受け取る。
+  // s-maxage=3600: Vercel Edge は 1 時間キャッシュ（デプロイ時に自動 purge）。
+  // stale-while-revalidate: フレッシュ取得中は旧版を返し続ける。
   "Cache-Control":
-    "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
+    "public, max-age=0, must-revalidate, s-maxage=3600, stale-while-revalidate=86400",
+  ETag: ETAG,
 };
 
 // 画像配信そのものが副作用を持つテンプレート用。GitHub Camo / CDN / ブラウザ
@@ -51,6 +65,21 @@ export async function GET(
       { error: `テンプレート "${templateName}" が見つかりません` },
       { status: 404 },
     );
+  }
+
+  // デプロイが同じなら 304 で早期終了（fetchData / Satori / SVG を全てスキップ）。
+  // noCache テンプレート（訪問者カウンタ等）は毎回 origin まで届かせたいのでスキップ。
+  if (!definition.noCache) {
+    const ifNoneMatch = request.headers.get("if-none-match");
+    if (ifNoneMatch && ifNoneMatch === ETAG) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          "Cache-Control": CACHE_HEADERS["Cache-Control"],
+          ETag: ETAG,
+        },
+      });
+    }
   }
 
   const { searchParams } = new URL(request.url);
