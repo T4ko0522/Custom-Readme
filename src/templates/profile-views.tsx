@@ -16,16 +16,66 @@ import type { TemplateDefinition } from "./types";
 // README に埋め込む視聴回数バッジ。画像が配信されるたびに INCR を実行する。
 // ルート側で Cache-Control: no-store を付与することで、GitHub Camo や
 // ブラウザキャッシュを素通りさせ、毎リクエストで Redis 更新を走らせる。
+//
+// 幅は label / count の長さから動的に算出し余白を作らない。route.tsx は
+// props.__width を受け取り PNG 側でも同じ幅でレンダリングする。
 // ============================================================
 
-const W = 360;
-const H = 56;
+const H = 40;
+const RADIUS = 8;
+const BAR_W = 7;
+const PAD_X = 12;
+const DOT_SIZE = 6;
+const DOT_GAP = 8;
+const VALUE_GAP = 10;
+const LABEL_FONT = 11;
+const LABEL_TRACKING = 1.3;
+const COUNT_FONT = 14;
+const FALLBACK_W = 200;
+
+/**
+ * 指定フォントでのテキスト描画幅をざっくり推定する。
+ * Edge ランタイムにテキスト計測 API は無いので、CJK はフル幅、Latin は
+ * fontSize * 0.55（uppercase なら 0.62）で近似する。
+ */
+function estimateTextWidth(
+  text: string,
+  fontSize: number,
+  letterSpacing = 0,
+  uppercase = false,
+): number {
+  const latinRatio = uppercase ? 0.62 : 0.55;
+  let w = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    const cjk =
+      (code >= 0x3000 && code <= 0x9fff) ||
+      (code >= 0xac00 && code <= 0xd7af) ||
+      (code >= 0xff00 && code <= 0xffef);
+    w += cjk ? fontSize : fontSize * latinRatio;
+  }
+  w += Math.max(0, text.length - 1) * letterSpacing;
+  return w;
+}
+
+function computeWidth(label: string, countText: string): number {
+  const labelW = estimateTextWidth(
+    label.toUpperCase(),
+    LABEL_FONT,
+    LABEL_TRACKING,
+    true,
+  );
+  const countW = estimateTextWidth(countText, COUNT_FONT, 0);
+  return Math.ceil(
+    BAR_W + PAD_X * 2 + DOT_SIZE + DOT_GAP + labelW + VALUE_GAP + countW,
+  );
+}
 
 export const profileViews: TemplateDefinition = {
   name: "profile-views",
   description:
-    "訪問者カウンタ単独のバッジカード。画像が配信されるたびに Redis を INCR し、キャッシュは無効化される。",
-  width: W,
+    "訪問者カウンタ単独のバッジカード。画像が配信されるたびに Redis を INCR し、キャッシュは無効化される。幅は label / count に合わせて自動で縮む。",
+  width: FALLBACK_W,
   height: H,
   params: {
     id: {
@@ -52,7 +102,11 @@ export const profileViews: TemplateDefinition = {
   fetchData: async (props) => {
     const id = (props.id as string).trim();
     const visitors = await incrementVisitors(id);
-    return { visitors };
+    const label = (props.label as string) || "Profile views";
+    const countText =
+      typeof visitors === "number" ? visitors.toLocaleString() : "—";
+    const __width = computeWidth(label, countText);
+    return { visitors, __width };
   },
 
   render: (props) => {
@@ -70,14 +124,14 @@ export const profileViews: TemplateDefinition = {
           height: "100%",
           backgroundColor: theme.bg,
           fontFamily: "Inter, Noto Sans JP",
-          borderRadius: "12px",
+          borderRadius: `${RADIUS}px`,
           overflow: "hidden",
         }}
       >
         <div
           style={{
             display: "flex",
-            width: "7px",
+            width: `${BAR_W}px`,
             background: STATIC_BAR_GRADIENT,
           }}
         />
@@ -85,28 +139,28 @@ export const profileViews: TemplateDefinition = {
         <div
           style={{
             display: "flex",
-            flex: 1,
             alignItems: "center",
-            gap: "10px",
-            padding: "0 20px",
+            gap: `${DOT_GAP}px`,
+            padding: `0 ${PAD_X}px`,
           }}
         >
           <div
             style={{
               display: "flex",
-              width: "8px",
-              height: "8px",
+              width: `${DOT_SIZE}px`,
+              height: `${DOT_SIZE}px`,
               borderRadius: "999px",
               background: "#f97316",
             }}
           />
           <span
             style={{
-              fontSize: "12px",
+              fontSize: `${LABEL_FONT}px`,
               fontWeight: 700,
               color: theme.subtext,
               textTransform: "uppercase",
-              letterSpacing: "1.5px",
+              letterSpacing: `${LABEL_TRACKING}px`,
+              whiteSpace: "nowrap",
             }}
           >
             {label}
@@ -114,11 +168,12 @@ export const profileViews: TemplateDefinition = {
           <span
             style={{
               display: "flex",
-              marginLeft: "auto",
-              fontSize: "18px",
+              marginLeft: `${VALUE_GAP - DOT_GAP}px`,
+              fontSize: `${COUNT_FONT}px`,
               fontWeight: 700,
               color: theme.text,
-              letterSpacing: "-0.3px",
+              letterSpacing: "-0.2px",
+              whiteSpace: "nowrap",
             }}
           >
             {countText}
@@ -135,12 +190,22 @@ export const profileViews: TemplateDefinition = {
     const countText =
       typeof visitors === "number" ? visitors.toLocaleString() : "—";
 
-    const barW = 7;
-    const padX = 20;
-    const contentX = barW + padX;
+    const W =
+      typeof props.__width === "number" && props.__width > 0
+        ? (props.__width as number)
+        : computeWidth(label, countText);
+
+    const contentX = BAR_W + PAD_X;
     const centerY = H / 2;
 
-    const RADIUS = 10;
+    const labelX = contentX + DOT_SIZE + DOT_GAP;
+    const labelW = estimateTextWidth(
+      label.toUpperCase(),
+      LABEL_FONT,
+      LABEL_TRACKING,
+      true,
+    );
+    const countX = labelX + labelW + VALUE_GAP;
 
     return svgRoot(
       W,
@@ -161,22 +226,22 @@ export const profileViews: TemplateDefinition = {
         ${dynamicLeftBar(H)}
 
         <!-- 脈動するドット -->
-        <circle cx="${contentX + 4}" cy="${centerY}" r="4" fill="#f97316"
+        <circle cx="${contentX + DOT_SIZE / 2}" cy="${centerY}" r="${DOT_SIZE / 2}" fill="#f97316"
           class="fade-in" style="animation-delay: 0.1s">
           <animate attributeName="opacity" values="1;0.35;1" dur="1.8s" repeatCount="indefinite" />
         </circle>
 
         <!-- ラベル -->
-        <text x="${contentX + 18}" y="${centerY + 4}" font-size="12" font-weight="700"
+        <text x="${labelX}" y="${centerY + 4}" font-size="${LABEL_FONT}" font-weight="700"
           fill="${theme.subtext}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
-          letter-spacing="1.5" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(
+          letter-spacing="${LABEL_TRACKING}" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(
             label.toUpperCase(),
           )}</text>
 
-        <!-- カウント（右寄せ） -->
-        <text x="${W - padX}" y="${centerY + 6}" text-anchor="end" font-size="18" font-weight="700"
+        <!-- カウント（ラベル直後に左寄せ） -->
+        <text x="${countX}" y="${centerY + 5}" font-size="${COUNT_FONT}" font-weight="700"
           fill="${theme.text}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
-          letter-spacing="-0.3" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(countText)}</text>
+          letter-spacing="-0.2" class="fade-in-up" style="animation-delay: 0.2s">${escSvg(countText)}</text>
       </g>
     `,
     );

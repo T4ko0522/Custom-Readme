@@ -20,14 +20,14 @@ import type { TemplateDefinition } from "./types";
 // props.__width を受け取り PNG 側でも同じ幅でレンダリングする。
 // ============================================================
 
-const H = 56;
-const RADIUS = 10;
+const H = 40;
+const RADIUS = 8;
 const BAR_W = 7;
-const ICON_SIZE = 22;
-const GAP = 10;
-const PAD_X = 18;
-const FONT_SIZE = 16;
-const FALLBACK_W = 140; // fetchData が走る前の meta 返却値
+const ICON_SIZE = 18;
+const GAP = 8;
+const PAD_X = 14;
+const FONT_SIZE = 14;
+const FALLBACK_W = 120; // fetchData が走る前の meta 返却値
 
 /** テーマ別のボタン表面色（bg より一段立体感を出す専用トーン） */
 function buttonSurface(name: string | undefined): { top: string; bottom: string } {
@@ -247,7 +247,7 @@ export const button: TemplateDefinition = {
 
         ${iconEl}
 
-        <text x="${textX}" y="${centerY + 5}" font-size="${FONT_SIZE}" font-weight="600"
+        <text x="${textX}" y="${centerY + 4}" font-size="${FONT_SIZE}" font-weight="600"
           fill="${theme.text}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif"
           letter-spacing="0.2" class="fade-in-up" style="animation-delay: 0.15s">${labelEsc}</text>
       </g>
