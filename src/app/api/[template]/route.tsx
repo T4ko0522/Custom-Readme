@@ -18,12 +18,16 @@ const DEPLOY_ID =
 const ETAG = `W/"${DEPLOY_ID}"`;
 
 const CACHE_HEADERS = {
-  // max-age=0 + must-revalidate: ブラウザは毎回 If-None-Match で問い合わせる。
-  //   ETag が一致すれば 304、デプロイが変われば 200 で新しい画像を受け取る。
-  // s-maxage=3600: Vercel Edge は 1 時間キャッシュ（デプロイ時に自動 purge）。
-  // stale-while-revalidate: フレッシュ取得中は旧版を返し続ける。
+  // GitHub README 経由では Camo (Fastly) が共有キャッシュとして手前に挟まる。
+  // max-age=0 / must-revalidate を付けると Camo が毎回 origin まで revalidate に
+  // 来てしまい、Camo の x-cache が常に MISS になる（実測で確認済）。
+  //   max-age=600: ブラウザは 10 分はキャッシュ
+  //   s-maxage=3600: 共有キャッシュ（Vercel Edge / Camo）は 1 時間保持
+  //   stale-while-revalidate=86400: 期限切れ後も 24h は旧版を返しつつ裏で更新
+  // ETag は残すので、max-age 切れ後の revalidate ではデプロイをまたいで
+  // 同一なら 304 が返る。
   "Cache-Control":
-    "public, max-age=0, must-revalidate, s-maxage=3600, stale-while-revalidate=86400",
+    "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400",
   ETag: ETAG,
 };
 
